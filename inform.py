@@ -38,6 +38,7 @@ def create_tg_sonarr_msgs(payload: Payload):
 
 
 class Consumer():
+
     def __init__(self, tg_queue: Queue, bot: telegram.Bot, chat_ids: [int],
                  logger: logging.Logger):
         self.tg_queue = tg_queue
