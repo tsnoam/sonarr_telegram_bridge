@@ -6,6 +6,7 @@ from queue import Queue
 import cherrypy
 import telegram
 import telegram.error
+import time
 import toml
 
 from sonarr import Payload
@@ -53,13 +54,24 @@ class Consumer():
 
     def send_tg(self, msg: str):
         for i in self.chat_ids:
+            attempt = 1
+            sleep_tm = 1
             while 1:
                 try:
                     self.bot.sendMessage(i, msg, parse_mode='Markdown')
+
                 except telegram.error.NetworkError:
+                    self.logger.warning(
+                        'telegram servers in trouble; attempt={} sleep={}'.format(
+                            attempt, sleep_tm))
+                    time.sleep(sleep_tm)
+                    attempt += 1
+                    if sleep_tm < 60:
+                        sleep_tm *= 2
                     continue
+
                 except telegram.TelegramError:
-                    self.logger.exception('==>')
+                    self.logger.exception('failed sending telegram')
 
                 break
 
