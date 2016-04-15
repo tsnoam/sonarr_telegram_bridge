@@ -1,12 +1,12 @@
 #!/usr/bin/python3
 import logging
 import threading
+import time
 from queue import Queue
 
 import cherrypy
 import telegram
 import telegram.error
-import time
 import toml
 from pytvdbapi.error import BadData
 
