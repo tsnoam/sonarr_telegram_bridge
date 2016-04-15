@@ -1,0 +1,4 @@
+cherrypy
+python-telegram-bot
+toml
+pytvdbapi
