@@ -8,6 +8,7 @@ class EpisodeInfo():
 
         self._show = self._db.get_series(show_id, 'en')
         self._show.update()
+        self._show.load_banners()
 
         self._episode = self._show[season][episode]
 
