@@ -60,3 +60,9 @@ target/
 
 #Ipython Notebook
 .ipynb_checkpoints
+
+# pycharm
+.idea/
+
+# conf file
+conf.toml
