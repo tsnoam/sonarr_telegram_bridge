@@ -2,9 +2,10 @@
 import logging
 import threading
 import time
-from queue import Queue
+from queue import Queue, Empty
 
 import cherrypy
+import signal
 import telegram
 import telegram.error
 import toml
@@ -44,16 +45,26 @@ class EnhanceEpisodeInfo():
         self.in_q = episodes_q
         self.out_q = telegram_q
         self.tvdb = tv_info.init_tvdb()
-        self.logger = logger
+        self._logger = logger.getChild(self.__class__.__name__)
+        self._stop_execution = threading.Event()
 
     def run(self):
-        while 1:
-            msg = self.in_q.get()
-            """:type: EpisodeMsg"""
+        while not self._stop_execution.is_set():
+            try:
+                msg = self.in_q.get(block=False, timeout=1)
+                """:type: EpisodeMsg"""
+            except Empty:
+                continue
+            if not msg:
+                continue
             info = self._get_episode_info(msg.series.tvdb_id, msg.episode)
             if info:
                 msg.info = info
                 self.out_q.put(msg)
+
+    def stop(self):
+        self._logger.info('stopping')
+        self._stop_execution.set()
 
     def _get_episode_info(self, tvdb_id: int, episode: Episode) -> tv_info.EpisodeInfo:
         attempt = 1
@@ -64,7 +75,7 @@ class EnhanceEpisodeInfo():
                 return tv_info.EpisodeInfo(self.tvdb, tvdb_id, episode.season, episode.num)
 
             except (ConnectionError, BadData):
-                self.logger.warning(
+                self._logger.warning(
                     'tvdb server in trouble; attempt={} sleep={}'.format(attempt, sleep_tm),
                     exc_info=True)
                 time.sleep(sleep_tm)
@@ -73,7 +84,7 @@ class EnhanceEpisodeInfo():
                     sleep_tm *= 2
 
             except Exception:
-                self.logger.exception('unknown error')
+                self._logger.exception('unknown error')
                 return
 
 
@@ -93,14 +104,22 @@ class SendTelegrams():
         self.tg_queue = tg_queue
         self.bot = bot
         self.chat_ids = chat_ids
-        self.logger = logger
+        self._logger = logger.getChild(self.__class__.__name__)
+        self._stop_execution = threading.Event()
 
     def run(self):
-        while 1:
-            msg = self.tg_queue.get()
-            """:type: EpisodeMsg"""
+        while not self._stop_execution.is_set():
+            try:
+                msg = self.tg_queue.get(block=True, timeout=1)
+                """:type: EpisodeMsg"""
+            except Empty:
+                continue
             txt = self._gen_text(msg)
             self.send_tg(txt)
+
+    def stop(self):
+        self._logger.info('stopping')
+        self._stop_execution.set()
 
     def send_tg(self, msg: str):
         for i in self.chat_ids:
@@ -111,7 +130,7 @@ class SendTelegrams():
                     self.bot.sendMessage(i, msg, parse_mode='Markdown')
 
                 except telegram.error.NetworkError:
-                    self.logger.warning(
+                    self._logger.warning(
                         'telegram servers in trouble; attempt={} sleep={}'.format(
                             attempt, sleep_tm))
                     time.sleep(sleep_tm)
@@ -121,7 +140,7 @@ class SendTelegrams():
                     continue
 
                 except telegram.TelegramError:
-                    self.logger.exception('failed sending telegram')
+                    self._logger.exception('failed sending telegram')
 
                 break
 
@@ -144,6 +163,37 @@ class SendTelegrams():
             banner=msg.info.banner_url)
 
 
+class CherrypyWrapper():
+
+    def __init__(self, app, logger: logging.Logger):
+        self._logger = logger.getChild(self.__class__.__name__)
+        self._app = app
+
+    def run(self):
+        cherrypy.server.socket_host = '0.0.0.0'
+        cherrypy.tree.mount(self._app)
+        cherrypy.engine.start()
+        cherrypy.engine.block()
+
+    def stop(self):
+        self._logger.info('stopping')
+        cherrypy.engine.exit()
+
+
+class SignalHandler():
+
+    def __init__(self, stoppable: list, logger: logging.Logger):
+        self._stoppable = stoppable
+        self._logger = logger
+        signal.signal(signal.SIGINT, self.handle)
+        signal.signal(signal.SIGTERM, self.handle)
+
+    def handle(self, signum, _stack_frame):
+        self._logger.info('caught signal {}: terminating'.format(signum))
+        for i in self._stoppable:
+            i.stop()
+
+
 def main():
     conf = toml.load('conf.toml')
     token = conf['global']['token']
@@ -152,23 +202,27 @@ def main():
     bot = telegram.Bot(token)
     episodes_q = Queue()
     tg_q = Queue()
-    logging.basicConfig()
+    logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger()
 
     crud = CRUDListener(episodes_q)
     eei = EnhanceEpisodeInfo(episodes_q, tg_q, logger)
     cons = SendTelegrams(tg_q, bot, chat_ids, logger)
+    cherry = CherrypyWrapper(crud, logger)
+
+    SignalHandler([eei, cons, cherry], logger)
 
     threads = [threading.Thread(target=cons.run),
-               threading.Thread(target=eei.run)]
+               threading.Thread(target=eei.run),
+               threading.Thread(target=cherry.run)]
+
     for i in threads:
         i.start()
 
-    cherrypy.server.socket_host = '0.0.0.0'
-    cherrypy.quickstart(crud)
-
     for i in threads:
         i.join()
+
+    logger.info('finished')
 
 
 if __name__ == '__main__':
