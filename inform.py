@@ -2,6 +2,7 @@
 import logging
 import threading
 import time
+import argparse
 from queue import Queue, Empty
 
 import cherrypy
@@ -165,12 +166,14 @@ class SendTelegrams():
 
 class CherrypyWrapper():
 
-    def __init__(self, app, logger: logging.Logger):
+    def __init__(self, app, logger: logging.Logger, port: int):
         self._logger = logger.getChild(self.__class__.__name__)
         self._app = app
+        self._port = port
 
     def run(self):
         cherrypy.server.socket_host = '0.0.0.0'
+        cherrypy.server.socket_port = self._port
         cherrypy.tree.mount(self._app)
         cherrypy.engine.start()
         cherrypy.engine.block()
@@ -195,7 +198,21 @@ class SignalHandler():
 
 
 def main():
-    conf = toml.load('conf.toml')
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--conf",
+                        help="Configuration file; (default: ./conf.toml)",
+                        default="conf.toml")
+    parser.add_argument("-p", "--port",
+                        help="Local port to listen to; (default: 8080)",
+                        default=8080,
+                        type=int)
+    args = parser.parse_args()
+
+    conf_file = args.conf
+    port = args.port
+
+    conf = toml.load(conf_file)
+
     token = conf['global']['token']
     chat_ids = conf['global']['chat_ids']
 
@@ -208,7 +225,7 @@ def main():
     crud = CRUDListener(episodes_q)
     eei = EnhanceEpisodeInfo(episodes_q, tg_q, logger)
     cons = SendTelegrams(tg_q, bot, chat_ids, logger)
-    cherry = CherrypyWrapper(crud, logger)
+    cherry = CherrypyWrapper(crud, logger, port)
 
     SignalHandler([eei, cons, cherry], logger)
 
