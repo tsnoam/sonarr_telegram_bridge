@@ -52,7 +52,7 @@ class EnhanceEpisodeInfo():
     def run(self):
         while not self._stop_execution.is_set():
             try:
-                msg = self.in_q.get(block=False, timeout=1)
+                msg = self.in_q.get(block=True, timeout=1)
                 """:type: EpisodeMsg"""
             except Empty:
                 continue
@@ -198,13 +198,17 @@ class SignalHandler():
 
 
 def main():
+    # set default parameters:
+    default_port = 8080
+    default_conf_file = './conf.toml'
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--conf",
-                        help="Configuration file; (default: ./conf.toml)",
-                        default="conf.toml")
+                        help="Configuration file; (default: {0})".format(default_conf_file),
+                        default=default_conf_file)
     parser.add_argument("-p", "--port",
-                        help="Local port to listen to; (default: 8080)",
-                        default=8080,
+                        help="Local port to listen to; (default: {0})".format(default_port),
+                        default=default_port,
                         type=int)
     args = parser.parse_args()
 
