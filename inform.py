@@ -204,10 +204,10 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--conf",
-                        help="Configuration file; (default: {0})".format(default_conf_file),
+                        help='Configuration file [%(default)s]',
                         default=default_conf_file)
     parser.add_argument("-p", "--port",
-                        help="Local port to listen to; (default: {0})".format(default_port),
+                        help='Local port to listen to [%(default)s]',
                         default=default_port,
                         type=int)
     args = parser.parse_args()
