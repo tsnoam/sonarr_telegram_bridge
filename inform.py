@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import os
 import logging
 import threading
 import time
@@ -199,7 +200,9 @@ class SignalHandler():
 
 
 def main():
-    conf = toml.load('conf.toml')
+    script_dir = os.path.dirname(__file__)
+    conf_file = os.path.join(script_dir, 'conf.toml')
+    conf = toml.load(conf_file)
     token = conf['global']['token']
     chat_ids = conf['global']['chat_ids']
 
