@@ -25,18 +25,22 @@ TELEGRAM_TEMPLATE = '''{title} S{season:02d}E{ep:02d} ({quality})
 
 class CRUDListener():
 
-    def __init__(self, episodes_q: Queue):
+    def __init__(self, episodes_q: Queue, logger: logging.Logger):
         self.queue = episodes_q
+        self.logger = logger
 
     @cherrypy.expose
     @cherrypy.tools.json_in()
     def sonarr(self):
-        msg = cherrypy.request.json
-        payload = Payload(msg)
+        try:
+            msg = cherrypy.request.json
+            payload = Payload(msg)
 
-        for i in payload.episodes:
-            msg = EpisodeMsg(payload.series, i, payload.type, None)
-            self.queue.put(msg)
+            for i in payload.episodes:
+                msg = EpisodeMsg(payload.series, i, payload.type, None)
+                self.queue.put(msg)
+        except Exception:
+            self.logger.exception('Invalid message')
 
 
 class EnhanceEpisodeInfo():
@@ -205,7 +209,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger()
 
-    crud = CRUDListener(episodes_q)
+    crud = CRUDListener(episodes_q, logger)
     eei = EnhanceEpisodeInfo(episodes_q, tg_q, logger)
     cons = SendTelegrams(tg_q, bot, chat_ids, logger)
     cherry = CherrypyWrapper(crud, logger)
