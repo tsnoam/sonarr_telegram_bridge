@@ -33,15 +33,15 @@ class CRUDListener():
     @cherrypy.expose
     @cherrypy.tools.json_in()
     def sonarr(self):
+        msg = cherrypy.request.json
         try:
-            msg = cherrypy.request.json
             payload = Payload(msg)
 
             for i in payload.episodes:
                 msg = EpisodeMsg(payload.series, i, payload.type, None)
                 self.queue.put(msg)
         except Exception:
-            self.logger.exception('Invalid message')
+            self.logger.exception('Invalid message: {}'.format(msg))
 
 
 class EnhanceEpisodeInfo():
