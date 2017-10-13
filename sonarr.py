@@ -7,7 +7,7 @@ def _get_key(info: dict, keys: List[str]):
     for key in (x for x in keys if x in info):
         return info[key]
     else:
-        raise Exception('Missing {}', keys[0])
+        raise Exception('Missing {}'.format(keys[0]))
 
 
 class Payload():
